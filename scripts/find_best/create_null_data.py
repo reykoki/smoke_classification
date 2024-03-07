@@ -1,11 +1,6 @@
 import shutil
+from shapely.geometry import Polygon, LineString, Point
 import glob
-import torch
-from torch.utils.data import DataLoader
-import torch.nn as nn
-from SmokeDataset import SmokeDataset
-from torchvision import transforms
-import segmentation_models_pytorch as smp
 import matplotlib
 from MakeDirs import MakeDirs
 import pyproj
@@ -28,7 +23,6 @@ import numpy as np
 import time
 import s3fs
 import pytz
-import multiprocessing
 import shutil
 import wget
 from suntime import Sun
@@ -50,6 +44,9 @@ def pick_temporal_smoke(smoke_shape, t_0, t_f):
     for idx, row in smoke_shape.iterrows():
         end = row['End']
         start = row['Start']
+        print(end)
+        print(start)
+        x = input('stop')
         # the ranges overlap if:
         if t_0-timedelta(minutes=10)<= end and start-timedelta(minutes=10) <= t_f:
             use_idx.append(idx)
@@ -199,6 +196,7 @@ def get_get_scn(sat_fns, extent, sleep_time=0):
     return old_scn, tmp_scn
 
 def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
+    x = input('line196')
 
     fn_head = sat_fns[0].split('C01_')[-1].split('.')[0].split('_c2')[0]
 
@@ -214,13 +212,15 @@ def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
 
     try:
         old_scn, scn = get_get_scn(sat_fns, extent)
-    except:
+    except Exception as e:
+        print(e)
         if 'G17' in sat_fns[0]:
             print('G17 data not done downloading!')
             print('wait 15 seconds')
             try:
                 old_scn, scn = get_get_scn(sat_fns, extent, 15)
-            except:
+            except Exception as e:
+                print(e)
                 print('G17 data STILL not done downloading!')
                 print('wait 60 seconds')
                 try:
@@ -237,7 +237,8 @@ def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
             print('wait 10 seconds')
             try:
                 old_scn, scn = get_get_scn(sat_fns, extent, 15)
-            except:
+            except Exception as e:
+                print(e)
                 print('G16 data STILL not done downloading!')
                 print('wait 60 seconds')
                 try:
@@ -246,6 +247,7 @@ def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
                     print('{} wouldnt download, moving on'.format(sat_fns[0]))
                     return fn_head
 
+    x = input('line244')
     lcc_proj = scn['cimss_true_color_sunz_rayleigh'].attrs['area'].to_cartopy_crs()
     scan_start = pytz.utc.localize(scn['cimss_true_color_sunz_rayleigh'].attrs['start_time'])
     scan_end = pytz.utc.localize(scn['cimss_true_color_sunz_rayleigh'].attrs['end_time'])
@@ -383,8 +385,8 @@ def get_random_dt(dt):
     sun_out = sunset - sunrise
     sun_out_secs = sun_out.total_seconds()
     secs_after_sunrise = np.random.uniform(0, sun_out_secs)
-    random_time = timedelta(seconds=secs_after_sunrise)
-    if abs(sunset - random_time) < abs(random_time - sunrise):
+    random_time = sunrise + timedelta(seconds=secs_after_sunrise)
+    if np.abs(sunset - random_time) < np.abs(random_time - sunrise):
         sat_num = 16
     else:
         sat_num = 17
@@ -441,9 +443,10 @@ def get_smoke(yr, month, day):
 def get_sat_files(dt):
     all_fn_heads = []
     all_sat_fns = []
-    sat_num, best_time = get_random_dt(dt)
+    best_time, sat_num = get_random_dt(dt)
     time_list = [best_time]
     print('best time; ', best_time)
+    fs = s3fs.S3FileSystem(anon=True)
     for curr_time in time_list:
         hr = curr_time.hour
         hr = str(hr).zfill(2)
@@ -482,6 +485,7 @@ def get_sat_files(dt):
 
     if len(all_sat_fns)>0:
         all_sat_fns = [list(item) for item in set(tuple(row) for row in all_sat_fns)]
+        all_sat_fns = all_sat_fns[0]
         all_fn_heads = list(set(all_fn_heads))
         return all_sat_fns, best_time
     return None, best_time
@@ -490,6 +494,7 @@ def get_file_locations(use_fns):
     file_locs = []
     fs = s3fs.S3FileSystem(anon=True)
     goes_dir = dn_dir + 'goes_temp/'
+    print(use_fns)
     for file_path in use_fns:
         fn = file_path.split('/')[-1]
         dl_loc = goes_dir+fn
@@ -501,16 +506,23 @@ def get_file_locations(use_fns):
             fs.get(file_path, dl_loc)
     return file_locs
 
-@ray.remote
+#@ray.remote
 def iter_rows(smoke_row):
+    print("YOOOOO")
     smoke = smoke_row['smoke']
     idx = smoke_row['idx']
     yr = smoke_row['time'].strftime('%Y')
     file_locs = smoke_row['file_locs']
     density = 'None'
 
+    
+    print(file_locs)
+    print(len(file_locs))
+    print(smoke_row)
+    x = input('513')
     if len(file_locs) > 0:
-        fns = create_data_truth(file_locs, smoke, idx, yr, density, rand_xy)
+
+        fns = create_data_truth(file_locs, smoke, idx, yr, density, (0,0))
         return fns
     else:
         print('ERROR NO FILES FOUND FOR best_time: ', best_time)
@@ -564,7 +576,8 @@ def check_overlap(center_x, center_y, smoke):
     y1 = center_y + 2.5e3
     poly = Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
     overlap = smoke.intersects(poly)
-    if (overlap==True.any()):
+    print(overlap)
+    if ((overlap==True).any()):
         return True
     else:
         return False
@@ -587,15 +600,16 @@ def iter_smoke(date):
     if smoke is not None:
         lcc_str = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
         lcc_proj = pyproj.CRS.from_user_input(lcc_str)
-        states = geopandas.read_file('/projects/mecr8410/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
+        states = geopandas.read_file('/projects/rey/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
         smoke = smoke.to_crs(lcc_proj)
         states = states.to_crs(lcc_proj)
         x_min, y_min, x_max, y_max = states.total_bounds
         num_samples = len(smoke)
+        num_samples = 1 
         xs = np.random.uniform(x_min, x_max, num_samples)
         ys = np.random.uniform(y_min, y_max, num_samples)
         smoke_rows = []
-        for idx, x in enumerate(sx):
+        for idx, x in enumerate(xs):
             y = ys[idx]
             overlap = check_overlap(x, y, smoke)
             if not overlap:
@@ -603,16 +617,16 @@ def iter_smoke(date):
                 if use_fns:
                     file_locs = get_file_locations(use_fns)
                     smoke_rows.append({'x': x, 'y': y, 'smoke': smoke, 'idx': idx, 'file_locs': file_locs, 'time': best_time})
-        ray_dir = "/scratch/alpine/mecr8410/tmp/{}{}".format(yr,dn)
-        if not os.path.isdir(ray_dir):
-            os.mkdir(ray_dir)
-        ray.init(num_cpus=8, _temp_dir=ray_dir, include_dashboard=False, ignore_reinit_error=True, dashboard_host='127.0.0.1')
+        #ray_dir = "/projects/rey/smoke_classification/tmp/{}{}".format(yr,dn)
+        #if not os.path.isdir(ray_dir):
+        #    os.mkdir(ray_dir)
+        #ray.init(num_cpus=8, _temp_dir=ray_dir, include_dashboard=False, ignore_reinit_error=True, dashboard_host='127.0.0.1')
         #fn_heads = run_remote(smoke_rows)
         fn_heads = run_no_ray(smoke_rows)
-        ray.shutdown()
-        shutil.rmtree(ray_dir)
-        if fn_heads:
-            remove_files(fn_heads)
+        #ray.shutdown()
+        #shutil.rmtree(ray_dir)
+        #if fn_heads:
+        #    remove_files(fn_heads)
 
 
 def main(start_dn, end_dn, yr):
@@ -623,7 +637,7 @@ def main(start_dn, end_dn, yr):
         dn = str(dn).zfill(3)
         dates.append([dn, yr])
     for date in dates:
-        dn_dir = '/scratch/alpine/mecr8410/semantic_segmentation_smoke/null_data/temp_data/{}{}/'.format(date[1], date[0])
+        dn_dir = './null_data/temp_data/{}{}/'.format(date[1], date[0])
         if not os.path.isdir(dn_dir):
             os.mkdir(dn_dir)
             MakeDirs(dn_dir, yr)
