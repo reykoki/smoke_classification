@@ -32,9 +32,7 @@ def get_file_list(idx):
     truth_file_list = []
     truth_file_list = glob.glob('{}truth/*/*/*_{}.tif'.format(dn_dir, idx))
     truth_file_list.sort()
-    print(truth_file_list)
     data_file_list = [s.replace('truth','data') for s in truth_file_list]
-    print('number of samples for idx:', len(truth_file_list))
     data_dict = {'find': {'truth': truth_file_list, 'data': data_file_list}}
     return data_dict
 
@@ -44,9 +42,9 @@ def pick_temporal_smoke(smoke_shape, t_0, t_f):
     for idx, row in smoke_shape.iterrows():
         end = row['End']
         start = row['Start']
-        print(end)
-        print(start)
-        x = input('stop')
+        fmt = '%Y%j %H%M'
+        start = pytz.utc.localize(datetime.strptime(row['Start'], fmt))
+        end = pytz.utc.localize(datetime.strptime(row['End'], fmt))
         # the ranges overlap if:
         if t_0-timedelta(minutes=10)<= end and start-timedelta(minutes=10) <= t_f:
             use_idx.append(idx)
@@ -70,10 +68,11 @@ def save_data(R, G, B, idx, fn_data, size=256):
     layers = np.dstack([R, G, B])
     total = np.sum(R).compute() + np.sum(G).compute() + np.sum(B).compute()
     print('========')
+    print("R:", np.sum(R).compute())
     print("total:", total)
     print('========')
     #print('SUM TOTAL: ', int(np.sum((total))))
-    if total > 100 and total < 1e5:
+    if total > 10 and total < 1e5:
         skimage.io.imsave(fn_data, layers)
         return True
     return False
@@ -159,6 +158,8 @@ def get_truth(x, y, lcc_proj, smoke, idx, png_fn, tif_fn, center, img_shape):
     print(tif_fn)
     print(np.sum(truth_layers))
     print('---------------------------')
+    skimage.io.imsave(tif_fn, truth_layers)
+    return True
     if np.sum(truth_layers) == 0:
         skimage.io.imsave(tif_fn, truth_layers)
         return True
@@ -167,10 +168,10 @@ def get_truth(x, y, lcc_proj, smoke, idx, png_fn, tif_fn, center, img_shape):
         return False
 
 def get_extent(center):
-    x0 = center.x - 2.5e3
-    y0 = center.y - 2.5e3
-    x1 = center.x + 2.5e3
-    y1 = center.y + 2.5e3
+    x0 = center.x - 2.5e5
+    y0 = center.y - 2.5e5
+    x1 = center.x + 2.5e5
+    y1 = center.y + 2.5e5
     return [x0, y0, x1, y1]
 
 def get_scn(fns, extent):
@@ -196,7 +197,6 @@ def get_get_scn(sat_fns, extent, sleep_time=0):
     return old_scn, tmp_scn
 
 def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
-    x = input('line196')
 
     fn_head = sat_fns[0].split('C01_')[-1].split('.')[0].split('_c2')[0]
 
@@ -247,7 +247,6 @@ def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
                     print('{} wouldnt download, moving on'.format(sat_fns[0]))
                     return fn_head
 
-    x = input('line244')
     lcc_proj = scn['cimss_true_color_sunz_rayleigh'].attrs['area'].to_cartopy_crs()
     scan_start = pytz.utc.localize(scn['cimss_true_color_sunz_rayleigh'].attrs['start_time'])
     scan_end = pytz.utc.localize(scn['cimss_true_color_sunz_rayleigh'].attrs['end_time'])
@@ -455,7 +454,7 @@ def get_sat_files(dt):
 
         full_filelist = []
         if sat_num == '17':
-            view = 'F'
+            view = 'C'
         else:
             view = 'C'
         try:
@@ -508,18 +507,12 @@ def get_file_locations(use_fns):
 
 #@ray.remote
 def iter_rows(smoke_row):
-    print("YOOOOO")
     smoke = smoke_row['smoke']
     idx = smoke_row['idx']
     yr = smoke_row['time'].strftime('%Y')
     file_locs = smoke_row['file_locs']
     density = 'None'
 
-    
-    print(file_locs)
-    print(len(file_locs))
-    print(smoke_row)
-    x = input('513')
     if len(file_locs) > 0:
 
         fns = create_data_truth(file_locs, smoke, idx, yr, density, (0,0))
@@ -570,10 +563,10 @@ def remove_files(fn_heads):
             os.remove(tif_fn[0])
 
 def check_overlap(center_x, center_y, smoke):
-    x0 = center_x - 2.5e3
-    y0 = center_y - 2.5e3
-    x1 = center_x + 2.5e3
-    y1 = center_y + 2.5e3
+    x0 = center_x - 2.5e5
+    y0 = center_y - 2.5e5
+    x1 = center_x + 2.5e5
+    y1 = center_y + 2.5e5
     poly = Polygon([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
     overlap = smoke.intersects(poly)
     print(overlap)
@@ -600,17 +593,18 @@ def iter_smoke(date):
     if smoke is not None:
         lcc_str = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
         lcc_proj = pyproj.CRS.from_user_input(lcc_str)
-        states = geopandas.read_file('/projects/rey/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
+        states = geopandas.read_file('/projects/mecr8410/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
         smoke = smoke.to_crs(lcc_proj)
         states = states.to_crs(lcc_proj)
         x_min, y_min, x_max, y_max = states.total_bounds
         num_samples = len(smoke)
-        num_samples = 1 
+        num_samples = 1
         xs = np.random.uniform(x_min, x_max, num_samples)
         ys = np.random.uniform(y_min, y_max, num_samples)
         smoke_rows = []
         for idx, x in enumerate(xs):
             y = ys[idx]
+            print('x and y:', x, y)
             overlap = check_overlap(x, y, smoke)
             if not overlap:
                 use_fns, best_time = get_sat_files(dt)
@@ -622,7 +616,8 @@ def iter_smoke(date):
         #    os.mkdir(ray_dir)
         #ray.init(num_cpus=8, _temp_dir=ray_dir, include_dashboard=False, ignore_reinit_error=True, dashboard_host='127.0.0.1')
         #fn_heads = run_remote(smoke_rows)
-        fn_heads = run_no_ray(smoke_rows)
+        if len(smoke_rows) > 0:
+            fn_heads = run_no_ray(smoke_rows)
         #ray.shutdown()
         #shutil.rmtree(ray_dir)
         #if fn_heads:
@@ -644,7 +639,7 @@ def main(start_dn, end_dn, yr):
         start = time.time()
         print(date)
         iter_smoke(date)
-        shutil.rmtree(dn_dir)
+        #DELshutil.rmtree(dn_dir)
         print("Time elapsed for day {}: {}s".format(date, int(time.time() - start)), flush=True)
 
 if __name__ == '__main__':
