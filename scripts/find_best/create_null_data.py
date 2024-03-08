@@ -454,9 +454,9 @@ def get_sat_files(dt):
 
         full_filelist = []
         if sat_num == '17':
-            view = 'C'
+            view = 'F'
         else:
-            view = 'C'
+            view = 'F'
         try:
             full_filelist = fs.ls("noaa-goes{}/ABI-L1b-Rad{}/{}/{}/{}/".format(sat_num, view, yr, dn, hr))
         except Exception as e:

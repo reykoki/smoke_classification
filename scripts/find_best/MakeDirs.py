@@ -10,7 +10,7 @@ import glob
 class MakeDirs():
     def __init__(self, root_dir, yr):
         data_type = ['coords/', 'truth/', 'data/']
-        densities = ['/Light/', '/Medium/', '/Heavy/']
+        densities = ['/Light/', '/Medium/', '/Heavy/', '/None/']
         for dt in data_type:
             for den in densities:
                 den_path = root_dir + dt + yr + den
