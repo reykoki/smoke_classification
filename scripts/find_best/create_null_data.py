@@ -154,12 +154,6 @@ def get_truth(x, y, lcc_proj, smoke, idx, png_fn, tif_fn, center, img_shape):
     med_truth = np.clip(med_truth, 0, 1)
 
     truth_layers = np.dstack([high_truth, med_truth, low_truth])
-    print('---------------------------')
-    print(tif_fn)
-    print(np.sum(truth_layers))
-    print('---------------------------')
-    skimage.io.imsave(tif_fn, truth_layers)
-    return True
     if np.sum(truth_layers) == 0:
         skimage.io.imsave(tif_fn, truth_layers)
         return True
@@ -196,15 +190,13 @@ def get_get_scn(sat_fns, extent, sleep_time=0):
     old_scn, tmp_scn = get_scn(sat_fns, extent)
     return old_scn, tmp_scn
 
-def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
+def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy, center):
 
     fn_head = sat_fns[0].split('C01_')[-1].split('.')[0].split('_c2')[0]
 
     lcc_str = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
     lcc_proj = pyproj.CRS.from_user_input(lcc_str)
 
-    centers = smoke.centroid
-    center = centers.loc[idx0]
     try:
         extent = get_extent(center)
     except:
@@ -283,8 +275,9 @@ def create_data_truth(sat_fns, smoke, idx0, yr, density, rand_xy):
         tif_fn_data = dn_dir + 'data/{}/{}/{}_{}.tif'.format(yr, density, fn_head, idx0)
         tif_fn_coords = dn_dir + 'coords/{}/{}/{}_{}.tif'.format(yr, density, fn_head, idx0)
         data_saved = save_data(R, G, B, idx, tif_fn_data)
+        print('DATA SAVED', data_saved)
         if data_saved:
-            truth_saved  = get_truth(x, y, lcc_proj, rel_smoke, idx, png_fn_truth, tif_fn_truth, center, img_shape)
+            truth_saved = get_truth(x, y, lcc_proj, rel_smoke, idx, png_fn_truth, tif_fn_truth, center, img_shape)
             if truth_saved:
                 plot_coords(lat, lon, idx, tif_fn_coords)
     return fn_head
@@ -512,10 +505,11 @@ def iter_rows(smoke_row):
     yr = smoke_row['time'].strftime('%Y')
     file_locs = smoke_row['file_locs']
     density = 'None'
+    center = smoke_row['center']
 
     if len(file_locs) > 0:
 
-        fns = create_data_truth(file_locs, smoke, idx, yr, density, (0,0))
+        fns = create_data_truth(file_locs, smoke, idx, yr, density, (0,0), center)
         return fns
     else:
         print('ERROR NO FILES FOUND FOR best_time: ', best_time)
@@ -575,6 +569,34 @@ def check_overlap(center_x, center_y, smoke):
     else:
         return False
 
+class Center:
+    def __init__(self, x, y):
+        self.x = x 
+        self.y = y 
+
+def get_rand_point(x_min, y_min, x_max, y_max):
+    x = np.random.uniform(x_min, x_max)
+    y = np.random.uniform(y_min, y_max)
+    center = Center(x, y)
+    return center 
+
+def make_centers_no_overlap(states, smoke):
+    x_min, y_min, x_max, y_max = states.total_bounds
+    num_samples = len(smoke)
+    num_samples = 1
+    centers = []
+    for sample_num in range(num_samples):
+        overlap = True
+        # 10 tries to find non overlapping point
+        for i in range(10):
+            center = get_rand_point(x_min, y_min, x_max, y_max) 
+            overlap = check_overlap(center.x, center.y, smoke)
+            if overlap == False:
+                break
+        if not overlap:
+            centers.append(center)
+    return centers
+
 # analysts can only label data that is taken during the daytime, we want to filter for geos data that was within the timeframe the analysts are looking at
 def iter_smoke(date):
 
@@ -593,24 +615,18 @@ def iter_smoke(date):
     if smoke is not None:
         lcc_str = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
         lcc_proj = pyproj.CRS.from_user_input(lcc_str)
-        states = geopandas.read_file('/projects/mecr8410/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
+        #states = geopandas.read_file('/projects/mecr8410/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
+        states = geopandas.read_file('/projects/rey/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
         smoke = smoke.to_crs(lcc_proj)
         states = states.to_crs(lcc_proj)
-        x_min, y_min, x_max, y_max = states.total_bounds
-        num_samples = len(smoke)
-        num_samples = 1
-        xs = np.random.uniform(x_min, x_max, num_samples)
-        ys = np.random.uniform(y_min, y_max, num_samples)
+        centers = make_centers_no_overlap(states, smoke)
         smoke_rows = []
-        for idx, x in enumerate(xs):
-            y = ys[idx]
-            print('x and y:', x, y)
-            overlap = check_overlap(x, y, smoke)
-            if not overlap:
-                use_fns, best_time = get_sat_files(dt)
-                if use_fns:
-                    file_locs = get_file_locations(use_fns)
-                    smoke_rows.append({'x': x, 'y': y, 'smoke': smoke, 'idx': idx, 'file_locs': file_locs, 'time': best_time})
+        for idx, center in enumerate(centers):
+            use_fns, best_time = get_sat_files(dt)
+            if use_fns:
+                file_locs = get_file_locations(use_fns)
+                smoke_rows.append({'center': center, 'smoke': smoke, 'idx': idx, 'file_locs': file_locs, 'time': best_time})
+
         #ray_dir = "/projects/rey/smoke_classification/tmp/{}{}".format(yr,dn)
         #if not os.path.isdir(ray_dir):
         #    os.mkdir(ray_dir)
