@@ -27,6 +27,6 @@ conda activate g2g
 
 export RAY_DEDUP_LOGS=0
 
-python create_data.py $START $END $YEAR
+python create_null_data.py 10 10 2022
 exit 0
 

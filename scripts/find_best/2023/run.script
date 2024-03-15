@@ -27,6 +27,6 @@ conda activate g2g
 
 export RAY_DEDUP_LOGS=0
 
-python /scratch/alpine/mecr8410/semantic_segmentation_smoke/find_best/create_data.py $START $END $YEAR
+python /projects/mecr8410/smoke_classification/scripts/find_best/create_null_data.py $START $END $YEAR
 exit 0
 

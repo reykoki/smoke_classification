@@ -68,7 +68,6 @@ def save_data(R, G, B, idx, fn_data, size=256):
     layers = np.dstack([R, G, B])
     total = np.sum(R).compute() + np.sum(G).compute() + np.sum(B).compute()
     print('========')
-    print("R:", np.sum(R).compute())
     print("total:", total)
     print('========')
     #print('SUM TOTAL: ', int(np.sum((total))))
@@ -410,21 +409,20 @@ def get_closest_file(fns, best_time, sat_num):
     return use_fns
 
 def get_smoke(yr, month, day):
+    smoke_dir = "/scratch/alpine/mecr8410/semantic_segmentation_smoke/new_data/smoke/"
     fn = 'hms_smoke{}{}{}.zip'.format(yr, month, day)
     print('DOWNLOADING SMOKE:')
     print(fn)
-    out_dir = dn_dir + 'smoke/'
-    if os.path.exists(out_dir+fn):
+    smoke_shape_fn = smoke_dir + 'hms_smoke{}{}{}.shp'.format(yr,month,day)
+    if os.path.exists(smoke_dir+fn):
         print("{} already exists".format(fn))
-        smoke_shape_fn = dn_dir + 'smoke/hms_smoke{}{}{}.shp'.format(yr,month,day)
         smoke = geopandas.read_file(smoke_shape_fn)
         return smoke
     else:
         try:
             url = 'https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Smoke_Polygons/Shapefile/{}/{}/{}'.format(yr, month, fn)
-            filename = wget.download(url, out=out_dir)
-            shutil.unpack_archive(filename, out_dir)
-            smoke_shape_fn = dn_dir + 'smoke/hms_smoke{}{}{}.shp'.format(yr,month,day)
+            filename = wget.download(url, out=smoke_dir)
+            shutil.unpack_archive(filename, smoke_dir)
             smoke = geopandas.read_file(smoke_shape_fn)
             return smoke
         except Exception as e:
@@ -498,7 +496,7 @@ def get_file_locations(use_fns):
             fs.get(file_path, dl_loc)
     return file_locs
 
-#@ray.remote
+@ray.remote
 def iter_rows(smoke_row):
     smoke = smoke_row['smoke']
     idx = smoke_row['idx']
@@ -529,7 +527,7 @@ def run_remote(smoke_rows):
         print(smoke_rows)
         fn_heads = []
         for smoke_row in smoke_rows:
-            sat_fns = smoke_row['sat_fns']
+            sat_fns = smoke_row['file_locs']
             fn_head = sat_fns[0].split('C01_')[-1].split('.')[0].split('_c2')[0]
             fn_heads.append(fn_head)
         return fn_heads
@@ -571,25 +569,25 @@ def check_overlap(center_x, center_y, smoke):
 
 class Center:
     def __init__(self, x, y):
-        self.x = x 
-        self.y = y 
+        self.x = x
+        self.y = y
 
 def get_rand_point(x_min, y_min, x_max, y_max):
     x = np.random.uniform(x_min, x_max)
     y = np.random.uniform(y_min, y_max)
     center = Center(x, y)
-    return center 
+    return center
 
 def make_centers_no_overlap(states, smoke):
     x_min, y_min, x_max, y_max = states.total_bounds
     num_samples = len(smoke)
-    num_samples = 1
+    #num_samples = 1
     centers = []
     for sample_num in range(num_samples):
         overlap = True
         # 10 tries to find non overlapping point
         for i in range(10):
-            center = get_rand_point(x_min, y_min, x_max, y_max) 
+            center = get_rand_point(x_min, y_min, x_max, y_max)
             overlap = check_overlap(center.x, center.y, smoke)
             if overlap == False:
                 break
@@ -615,8 +613,8 @@ def iter_smoke(date):
     if smoke is not None:
         lcc_str = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
         lcc_proj = pyproj.CRS.from_user_input(lcc_str)
-        #states = geopandas.read_file('/projects/mecr8410/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
-        states = geopandas.read_file('/projects/rey/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
+        states = geopandas.read_file('/projects/mecr8410/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
+        #states = geopandas.read_file('/projects/rey/semantic_segmentation_smoke/data/shape_files/contiguous_states.shp')
         smoke = smoke.to_crs(lcc_proj)
         states = states.to_crs(lcc_proj)
         centers = make_centers_no_overlap(states, smoke)
@@ -628,16 +626,19 @@ def iter_smoke(date):
                 smoke_rows.append({'center': center, 'smoke': smoke, 'idx': idx, 'file_locs': file_locs, 'time': best_time})
 
         #ray_dir = "/projects/rey/smoke_classification/tmp/{}{}".format(yr,dn)
-        #if not os.path.isdir(ray_dir):
-        #    os.mkdir(ray_dir)
-        #ray.init(num_cpus=8, _temp_dir=ray_dir, include_dashboard=False, ignore_reinit_error=True, dashboard_host='127.0.0.1')
-        #fn_heads = run_remote(smoke_rows)
+        ray_dir = "/scratch/alpine/mecr8410/tmp/{}{}".format(yr,dn)
+        if not os.path.isdir(ray_dir):
+            os.mkdir(ray_dir)
+        ray.init(num_cpus=8, _temp_dir=ray_dir, include_dashboard=False, ignore_reinit_error=True, dashboard_host='127.0.0.1')
         if len(smoke_rows) > 0:
-            fn_heads = run_no_ray(smoke_rows)
-        #ray.shutdown()
-        #shutil.rmtree(ray_dir)
-        #if fn_heads:
-        #    remove_files(fn_heads)
+            fn_heads = run_remote(smoke_rows)
+        #if len(smoke_rows) > 0:
+        #    fn_heads = run_no_ray(smoke_rows)
+        #print(fn_heads)
+        ray.shutdown()
+        shutil.rmtree(ray_dir)
+        if fn_heads:
+            remove_files(fn_heads)
 
 
 def main(start_dn, end_dn, yr):
@@ -648,14 +649,10 @@ def main(start_dn, end_dn, yr):
         dn = str(dn).zfill(3)
         dates.append([dn, yr])
     for date in dates:
-        dn_dir = './null_data/temp_data/{}{}/'.format(date[1], date[0])
-        if not os.path.isdir(dn_dir):
-            os.mkdir(dn_dir)
-            MakeDirs(dn_dir, yr)
+        dn_dir = '/scratch/alpine/mecr8410/semantic_segmentation_smoke/null_data/'
         start = time.time()
         print(date)
         iter_smoke(date)
-        #DELshutil.rmtree(dn_dir)
         print("Time elapsed for day {}: {}s".format(date, int(time.time() - start)), flush=True)
 
 if __name__ == '__main__':
