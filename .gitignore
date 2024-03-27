@@ -1,2 +1,4 @@
 *.nc
 *.pth
+*.pkl
+*.out

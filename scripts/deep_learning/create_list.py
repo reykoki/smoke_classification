@@ -23,15 +23,15 @@ def check_files_exists(filelists):
 def get_training_fns(truth_dir, num_samples=None):
     train_truth_fns = []
     train_truth_light_fns = []
+    train_truth_none_fns = []
     for yr in train_yrs:
         yr_truth_dir = truth_dir + yr + '/'
-        truth_light_fns = glob.glob('{}/Light/*.tif'.format(yr_truth_dir))
-        train_truth_light_fns.extend(truth_light_fns)
-        truth_fns = glob.glob('{}/High/*.tif'.format(yr_truth_dir))
-        train_truth_fns.extend(truth_fns)
-        truth_fns = glob.glob('{}/Medium/*.tif'.format(yr_truth_dir))
-        train_truth_fns.extend(truth_fns)
-    if num_samples and num_samples < len(train_truth_fns)+ len(train_truth_light_fns):
+        train_truth_light_fns.extend(glob.glob('{}/Light/*.tif'.format(yr_truth_dir)))
+        train_truth_fns.extend(glob.glob('{}/Heavy/*.tif'.format(yr_truth_dir)))
+        train_truth_fns.extend(glob.glob('{}/Medium/*.tif'.format(yr_truth_dir)))
+        train_truth_fns.extend(glob.glob('{}/None/*.tif'.format(yr_truth_dir)))
+    len_all = len(train_truth_fns) + len(train_truth_light_fns) + len(train_truth_none_fns)
+    if num_samples and num_samples < len_all:
         if len(train_truth_fns) > num_samples:
             random.shuffle(train_truth_fns)
             train_truth_fns = train_truth_fns[:num_samples]
@@ -58,6 +58,9 @@ def create_truth_fns_every_ten_days(yr_truth_dir, val_test_yr, dns):
     truth_fns = []
     truth_light_fns = []
     for dn in dns:
+        truth_fns.extend(glob.glob('{}/None/*s{}{}*'.format(yr_truth_dir,
+                                                              val_test_yr,
+                                                              dn)))
         truth_fns.extend(glob.glob('{}/Heavy/*s{}{}*'.format(yr_truth_dir,
                                                               val_test_yr,
                                                               dn)))
@@ -110,7 +113,7 @@ test_class_list = make_class(test_truth_fns)
 
 data_dict = {'train': {'truth': train_class_list, 'data': train_data_fns},
              'val': {'truth': val_class_list, 'data': val_data_fns},
-             'test': {'truth': test_class_list, 'data': test_data_fns}}
+             'test': {'truth': test_class_list, 'data': test_data_file_list}}
 
 check_files = False
 if check_files:
