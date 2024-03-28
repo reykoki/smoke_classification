@@ -16,11 +16,8 @@ class SmokeDataset(Dataset):
 
     def __getitem__(self, idx):
         data_fn = self.data_fns['data'][idx]
-        truth_fn = self.data_fns['truth'][idx]
+        label = self.data_fns['truth'][idx]
         data_img = skimage.io.imread(data_fn, plugin='tifffile')
-        truth_img = skimage.io.imread(truth_fn, plugin='tifffile')
         data_tensor = self.transform(data_img)#.unsqueeze_(0)
-        truth_tensor = self.transform(truth_img)#.unsqueeze_(0)
-        truth_tensor = truth_tensor.type(torch.float)
-
-        return data_tensor, truth_tensor
+        label = self.transform(label)#.unsqueeze_(0)
+        return data_tensor, label

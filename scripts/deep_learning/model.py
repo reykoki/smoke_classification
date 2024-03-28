@@ -14,7 +14,7 @@ import segmentation_models_pytorch as smp
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 
-with open('data_dict_new.pkl', 'rb') as handle:
+with open('subsample.pkl', 'rb') as handle:
     data_dict = pickle.load(handle)
 #print(data_dict)
 
@@ -26,55 +26,17 @@ test_set = SmokeDataset(data_dict['test'], data_transforms)
 
 print('there are {} training samples in this dataset'.format(len(train_set)))
 
-def compute_iou(pred, true, level, iou_dict):
-    pred = torch.sigmoid(pred)
-    pred = (pred > 0.5) * 1
-    intersection = (pred + true == 2).sum()
-    union = (pred + true >= 1).sum()
-    try:
-        iou = intersection / union
-        iou_dict[level]['int'] += intersection
-        iou_dict[level]['union'] += union
-        print('{} density smoke gives: {} IoU'.format(level, iou))
-        return iou_dict
-    except Exception as e:
-        print(e)
-        print('there was no {} density smoke in this batch'.format(level))
-        return iou_dict
-
-def display_iou(iou_dict):
-    high_iou = iou_dict['high']['int']/iou_dict['high']['union']
-    med_iou = iou_dict['medium']['int']/iou_dict['medium']['union']
-    low_iou = iou_dict['low']['int']/iou_dict['low']['union']
-    iou = (iou_dict['high']['int'] + iou_dict['medium']['int'] + iou_dict['low']['int'])/(iou_dict['high']['union'] + iou_dict['medium']['union'] + iou_dict['low']['union'])
-    print('OVERALL HIGH DENSITY SMOKE GIVES: {} IoU'.format(high_iou))
-    print('OVERALL MEDIUM DENSITY SMOKE GIVES: {} IoU'.format(med_iou))
-    print('OVERALL LOW DENSITY SMOKE GIVES: {} IoU'.format(low_iou))
-    print('OVERALL OVER ALL DENSITY GIVES: {} IoU'.format(iou))
-
 def val_model(dataloader, model, BCE_loss):
     model.eval()
     torch.set_grad_enabled(False)
     total_loss = 0.0
-    iou_dict= {'high': {'int': 0, 'union':0}, 'medium': {'int': 0, 'union':0}, 'low': {'int': 0, 'union':0}}
     for data in dataloader:
         batch_data, batch_labels = data
         batch_data, batch_labels = batch_data.to(device, dtype=torch.float), batch_labels.to(device, dtype=torch.float)
         preds = model(batch_data)
-
-        high_loss = BCE_loss(preds[:,0,:,:], batch_labels[:,0,:,:]).to(device)
-        med_loss = BCE_loss(preds[:,1,:,:], batch_labels[:,1,:,:]).to(device)
-        low_loss = BCE_loss(preds[:,2,:,:], batch_labels[:,2,:,:]).to(device)
-        loss = 3*high_loss + 2*med_loss + low_loss
-        #loss = high_loss + med_loss + low_loss
+        loss = BCE_loss(preds, batch_labels).to(device)
         test_loss = loss.item()
         total_loss += test_loss
-        iou_dict= compute_iou(preds[:,0,:,:], batch_labels[:,0,:,:], 'high', iou_dict)
-        iou_dict= compute_iou(preds[:,1,:,:], batch_labels[:,1,:,:], 'medium', iou_dict)
-        iou_dict= compute_iou(preds[:,2,:,:], batch_labels[:,2,:,:], 'low', iou_dict)
-    display_iou(iou_dict)
-
-
     final_loss = total_loss/len(dataloader)
     print("Validation Loss: {}".format(round(final_loss,8)), flush=True)
     return final_loss
@@ -93,13 +55,9 @@ def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, 
         for data in train_dataloader:
             batch_data, batch_labels = data
             batch_data, batch_labels = batch_data.to(device, dtype=torch.float), batch_labels.to(device, dtype=torch.float)
-            #print(torch.isnan(batch_data).any())
             optimizer.zero_grad() # zero the parameter gradients
             preds = model(batch_data)
-            high_loss = BCE_loss(preds[:,0,:,:], batch_labels[:,0,:,:]).to(device)
-            med_loss = BCE_loss(preds[:,1,:,:], batch_labels[:,1,:,:]).to(device)
-            low_loss = BCE_loss(preds[:,2,:,:], batch_labels[:,2,:,:]).to(device)
-            loss = 3*high_loss + 2*med_loss + low_loss
+            loss = BCE_loss(preds, batch_labels).to(device)
             loss.backward()
             optimizer.step()
             train_loss = loss.item()
@@ -117,8 +75,7 @@ def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, 
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()
                     }
-            torch.save(checkpoint, '/scratch/alpine/mecr8410/semantic_segmentation_smoke/scripts/deep_learning/models/checkpoint_exp{}_n.pth'.format(exp_num))
-            #torch.save(model, './scratch/alpine/mecr8410/semantic_segmentation_smoke/scripts/deep_learning/models/best_model.pth')
+            torch.save(checkpoint, './models/checkpoint_exp{}_n.pth'.format(exp_num))
     print(history)
     return model, history
 
@@ -141,20 +98,14 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZ
 
 n_epochs = 100
 start_epoch = 0
-model = smp.DeepLabV3Plus(
-#model = smp.Unet(
-        #encoder_name="resnext101_32x8d", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
-        #encoder_name="timm-efficientnet-b2",
-        encoder_name=hyperparams['encoder'],
-        encoder_weights="imagenet", # use `imagenet` pre-trained weights for encoder initialization
-        in_channels=3, # model input channels
-        classes=3, # model output channels
-)
+
+model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
 model = model.to(device)
+
 lr = hyperparams['lr']
 optimizer = torch.optim.Adam(list(model.parameters()), lr=lr)
 if use_ckpt == True:
-    checkpoint=torch.load('/scratch/alpine/mecr8410/semantic_segmentation_smoke/scripts/deep_learning/models/checkpoint_exp{}_n.pth'.format(exp_num))
+    checkpoint=torch.load('./models/checkpoint_exp{}_n.pth'.format(exp_num))
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     start_epoch = checkpoint['epoch']
