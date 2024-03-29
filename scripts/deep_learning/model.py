@@ -1,15 +1,13 @@
 import pickle
 import sys
 import json
-from torchmetrics import JaccardIndex
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
-from torchsummary import summary
 from SmokeDataset import SmokeDataset
 from torchvision import transforms
-import segmentation_models_pytorch as smp
+from torchvision.models import resnet50, ResNet50_Weights
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -34,6 +32,7 @@ def val_model(dataloader, model, BCE_loss):
         batch_data, batch_labels = data
         batch_data, batch_labels = batch_data.to(device, dtype=torch.float), batch_labels.to(device, dtype=torch.float)
         preds = model(batch_data)
+        preds = preds.squeeze()
         loss = BCE_loss(preds, batch_labels).to(device)
         test_loss = loss.item()
         total_loss += test_loss
@@ -57,6 +56,7 @@ def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, 
             batch_data, batch_labels = batch_data.to(device, dtype=torch.float), batch_labels.to(device, dtype=torch.float)
             optimizer.zero_grad() # zero the parameter gradients
             preds = model(batch_data)
+            preds = preds.squeeze()
             loss = BCE_loss(preds, batch_labels).to(device)
             loss.backward()
             optimizer.step()
@@ -91,7 +91,8 @@ with open('configs/exp{}.json'.format(exp_num)) as fn:
 
 use_ckpt = False
 #use_ckpt = True
-BATCH_SIZE = int(hyperparams["batch_size"])
+#BATCH_SIZE = int(hyperparams["batch_size"])
+BATCH_SIZE = 128
 train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 val_loader = torch.utils.data.DataLoader(dataset=val_set, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
@@ -99,9 +100,9 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZ
 n_epochs = 100
 start_epoch = 0
 
-model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
+model = resnet50(weights=ResNet50_Weights.DEFAULT)
 model = model.to(device)
-
+model.fc = nn.Linear(model.fc.in_features, 1)
 lr = hyperparams['lr']
 optimizer = torch.optim.Adam(list(model.parameters()), lr=lr)
 if use_ckpt == True:
