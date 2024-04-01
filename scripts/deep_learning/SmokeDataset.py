@@ -19,5 +19,5 @@ class SmokeDataset(Dataset):
         label = self.data_fns['truth'][idx]
         data_img = skimage.io.imread(data_fn, plugin='tifffile')
         data_tensor = self.transform(data_img)#.unsqueeze_(0)
-        label = self.transform(label)#.unsqueeze_(0)
+        label = torch.tensor(label).float()
         return data_tensor, label

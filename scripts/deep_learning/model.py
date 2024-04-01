@@ -1,4 +1,5 @@
 import pickle
+import time
 import sys
 import json
 import numpy as np
@@ -40,12 +41,21 @@ def val_model(dataloader, model, BCE_loss):
     print("Validation Loss: {}".format(round(final_loss,8)), flush=True)
     return final_loss
 
+def check_data(train_dataloader, val_dataloader):
+    for data in train_dataloader:
+        continue
+    print('train data is good')
+    for data in val_dataloader:
+        continue
+    print('val data is good')
+
 def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, exp_num):
     history = dict(train=[], val=[])
     best_loss = 10000.0
     BCE_loss = nn.BCEWithLogitsLoss()
 
     for epoch in range(start_epoch, n_epochs):
+        epoch_start = time.time()
         total_loss = 0.0
         print('--------------\nStarting Epoch: {}'.format(epoch), flush=True)
         model.train()
@@ -64,6 +74,7 @@ def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, 
             total_loss += train_loss
         epoch_loss = total_loss/len(train_dataloader)
         print("Training Loss:   {0}".format(round(epoch_loss,8), epoch+1), flush=True)
+        print("Time elapsed for epoch: {}s".format(int(time.time() - epoch_start)), flush=True)
         val_loss = val_model(val_dataloader, model, BCE_loss)
         history['val'].append(val_loss)
         history['train'].append(epoch_loss)
@@ -92,7 +103,7 @@ with open('configs/exp{}.json'.format(exp_num)) as fn:
 use_ckpt = False
 #use_ckpt = True
 #BATCH_SIZE = int(hyperparams["batch_size"])
-BATCH_SIZE = 128
+BATCH_SIZE = 256
 train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 val_loader = torch.utils.data.DataLoader(dataset=val_set, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
@@ -100,9 +111,10 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZ
 n_epochs = 100
 start_epoch = 0
 
+print(resnet50)
 model = resnet50(weights=ResNet50_Weights.DEFAULT)
-model = model.to(device)
 model.fc = nn.Linear(model.fc.in_features, 1)
+model = model.to(device)
 lr = hyperparams['lr']
 optimizer = torch.optim.Adam(list(model.parameters()), lr=lr)
 if use_ckpt == True:
@@ -112,4 +124,5 @@ if use_ckpt == True:
     start_epoch = checkpoint['epoch']
 
 train_model(train_loader, val_loader, model, n_epochs, start_epoch, exp_num)
+#check_data(train_loader, val_loader)
 

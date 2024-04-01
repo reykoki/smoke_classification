@@ -15,11 +15,12 @@ unset SLURM_MEM_PER_NODE
 unset SLURM_MEM_PER_GPU
 
 module purge
-module load cuda/11.8
 module load cudnn/8.6
+module load cuda/12.1.1
 
 source /curc/sw/anaconda3/2023.09/bin/activate
-conda activate alpine
+conda activate alps
+export LD_LIBRARY_PATH=/projects/mecr8410/software/anaconda/envs/alps/lib/python3.12/site-packages/nvidia/nccl/lib:$LD_LIBRARY_PATH
 
 python model.py $EXP_NUM
 exit 0

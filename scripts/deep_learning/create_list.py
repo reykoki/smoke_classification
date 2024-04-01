@@ -20,6 +20,7 @@ def check_files_exists(filelists):
     check_list(filelists['truth'])
     check_list(filelists['data'])
 
+num_samples = {'Light': 10000, 'Medium': 10000, 'Heavy':10000, 'None': 3000}
 def get_training_fns(truth_dir, num_samples=None):
     train_truth_fns = []
     train_truth_light_fns = []
@@ -124,3 +125,5 @@ if check_files:
 
 with open('class_data_dict.pkl', 'wb') as handle:
     pickle.dump(data_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
