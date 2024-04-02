@@ -2,9 +2,7 @@ from PIL import Image
 #from torchvision import transforms
 import torch
 from torch.utils.data import Dataset, DataLoader
-
 import skimage
-
 
 class SmokeDataset(Dataset):
     def __init__(self, data_dict, transform=None):

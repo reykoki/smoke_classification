@@ -11,7 +11,8 @@ data_dir = '/scratch/alpine/mecr8410/semantic_segmentation_smoke/filtered_data/d
 
 cats = ['Light', 'Medium', 'Heavy', 'None']
 cat_count = {'Light':100, 'Medium':100, 'Heavy': 100, 'None': 100}
-#cat_count = {'Light':None, 'Medium':None, 'Heavy': None, 'None': None}
+cat_count = {'Light':1e10, 'Medium': 1e10, 'Heavy': 1e10, 'None': 1e10}
+#cat_count = {'Light':int(1e3), 'Medium': int(1e3), 'Heavy': int(1e3), 'None': int(1e3)}
 
 
 def make_class(data_fns, cat):

@@ -8,7 +8,8 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 from SmokeDataset import SmokeDataset
 from torchvision import transforms
-from torchvision.models import resnet50, ResNet50_Weights
+#from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import efficientnet_b2, EfficientNet_B2_Weights
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -74,7 +75,6 @@ def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, 
             total_loss += train_loss
         epoch_loss = total_loss/len(train_dataloader)
         print("Training Loss:   {0}".format(round(epoch_loss,8), epoch+1), flush=True)
-        print("Time elapsed for epoch: {}s".format(int(time.time() - epoch_start)), flush=True)
         val_loss = val_model(val_dataloader, model, BCE_loss)
         history['val'].append(val_loss)
         history['train'].append(epoch_loss)
@@ -86,7 +86,8 @@ def train_model(train_dataloader, val_dataloader, model, n_epochs, start_epoch, 
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()
                     }
-            torch.save(checkpoint, './models/checkpoint_exp{}_n.pth'.format(exp_num))
+            torch.save(checkpoint, './models/checkpoint_exp{}_en.pth'.format(exp_num))
+        print("Time elapsed for epoch: {}s".format(int(time.time() - epoch_start)), flush=True)
     print(history)
     return model, history
 
@@ -103,7 +104,7 @@ with open('configs/exp{}.json'.format(exp_num)) as fn:
 use_ckpt = False
 #use_ckpt = True
 #BATCH_SIZE = int(hyperparams["batch_size"])
-BATCH_SIZE = 256
+BATCH_SIZE = 128
 train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
 val_loader = torch.utils.data.DataLoader(dataset=val_set, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
@@ -111,9 +112,10 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=BATCH_SIZ
 n_epochs = 100
 start_epoch = 0
 
-print(resnet50)
-model = resnet50(weights=ResNet50_Weights.DEFAULT)
-model.fc = nn.Linear(model.fc.in_features, 1)
+#model = resnet50(weights=ResNet50_Weights.DEFAULT)
+#model.fc = nn.Linear(model.fc.in_features, 1)
+model = efficientnet_b2(weights=EfficientNet_B2_Weights.DEFAULT)
+model.classifier[1] = nn.Linear(model.classifier[1].in_features, 1)
 model = model.to(device)
 lr = hyperparams['lr']
 optimizer = torch.optim.Adam(list(model.parameters()), lr=lr)
