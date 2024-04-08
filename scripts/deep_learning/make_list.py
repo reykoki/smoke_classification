@@ -3,11 +3,12 @@ import pickle
 import glob
 import random
 
-yrs = ['2018', '2019', '2020', '2021', '2022', '2023']
-yrs = ['2020', '2021', '2022']
+yrs = ['2020', '2021']
+yrs = ['2018', '2019', '2020', '2021', '2023']
+yrs = ['2020', '2021', '2023']
 val_test_yr = '2022'
 
-data_dir = '/scratch/alpine/mecr8410/semantic_segmentation_smoke/filtered_data/data/'
+truth_dir = '/scratch/alpine/mecr8410/semantic_segmentation_smoke/filtered_data/truth/'
 
 cats = ['Light', 'Medium', 'Heavy', 'None']
 cat_count = {'Light':100, 'Medium':100, 'Heavy': 100, 'None': 100}
@@ -35,12 +36,14 @@ def get_val_test_fns(yr, cat_count, dataset):
     truth = []
     data_fns = []
     days_oi = list_every_ten_days(dataset)
-    yr_data_dir = data_dir + yr + '/'
+    yr_truth_dir = truth_dir + yr + '/'
     cat_num_files = 0
     for cat in cat_count:
         cat_data_fns = []
         for days in days_oi:
-            cat_data_fns.extend(glob.glob('{}{}/*_s{}{}*.tif'.format(yr_data_dir, cat, yr, days)))
+            cat_truth_fns = glob.glob('{}{}/*_s{}{}*.tif'.format(yr_truth_dir, cat, yr, days))
+            cat_data_fns_days = [s.replace('truth','data') for s in cat_truth_fns]
+            cat_data_fns.extend(cat_data_fns_days)
         if len(cat_data_fns) > cat_count[cat]:
             random.shuffle(cat_data_fns)
             cat_data_fns = cat_data_fns[:cat_count[cat]]
@@ -53,10 +56,11 @@ def get_train_fns(yrs, cat_count):
     truth = []
     data_fns = []
     for yr in yrs:
-        yr_data_dir = data_dir + yr + '/'
+        yr_truth_dir = truth_dir + yr + '/'
         cat_num_files = 0
         for cat in cat_count:
-            cat_data_fns = glob.glob('{}{}/*.tif'.format(yr_data_dir, cat))
+            cat_truth_fns = glob.glob('{}{}/*.tif'.format(yr_truth_dir, cat))
+            cat_data_fns = [s.replace('truth','data') for s in cat_truth_fns]
             if len(cat_data_fns) > cat_count[cat]:
                 random.shuffle(cat_data_fns)
                 cat_data_fns = cat_data_fns[:cat_count[cat]]

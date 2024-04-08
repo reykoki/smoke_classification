@@ -10,6 +10,7 @@ from SmokeDataset import SmokeDataset
 from torchvision import transforms
 #from torchvision.models import resnet50, ResNet50_Weights
 from torchvision.models import efficientnet_b2, EfficientNet_B2_Weights
+from torcheval.metrics import BinaryRecall, BinaryPrecision, BinaryAccuracy
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -29,6 +30,9 @@ print('there are {} training samples in this dataset'.format(len(train_set)))
 def val_model(dataloader, model, BCE_loss):
     model.eval()
     torch.set_grad_enabled(False)
+    recall_metric = BinaryRecall()
+    accuracy_metric = BinaryAccuracy()
+    precision_metric = BinaryPrecision()
     total_loss = 0.0
     for data in dataloader:
         batch_data, batch_labels = data
@@ -38,8 +42,17 @@ def val_model(dataloader, model, BCE_loss):
         loss = BCE_loss(preds, batch_labels).to(device)
         test_loss = loss.item()
         total_loss += test_loss
+        recall_metric.update(preds, batch_labels)
+        accuracy_metric.update(preds, batch_labels)
+        precision_metric.update(preds, batch_labels)
     final_loss = total_loss/len(dataloader)
+    recall = recall_metric.compute()
+    acc = accuracy_metric.compute()
+    prec = precision_metric.compute()
     print("Validation Loss: {}".format(round(final_loss,8)), flush=True)
+    print("Validation Recall: {}".format(recall), flush=True)
+    print("Validation Accuracy: {}".format(acc), flush=True)
+    print("Validation Precision: {}".format(prec), flush=True)
     return final_loss
 
 def check_data(train_dataloader, val_dataloader):

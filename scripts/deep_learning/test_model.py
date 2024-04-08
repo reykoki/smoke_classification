@@ -63,7 +63,7 @@ def test_model(dataloader, model, BCE_loss):
     accuracy_metric = BinaryAccuracy()
     precision_metric = BinaryPrecision()
     iou_dict= {'high': {'int': 0, 'union':0, 'prev_int': 0, 'prev_union': 0}, 'medium': {'int': 0, 'union':0, 'prev_int': 0, 'prev_union': 0}, 'low': {'int': 0, 'union':0, 'prev_int': 0, 'prev_union': 0}}
-    max_num = 100
+    max_num = 1000
     max_num = 0
     for idx, data in enumerate(dataloader):
         batch_data, batch_labels, data_fn = data
@@ -78,11 +78,12 @@ def test_model(dataloader, model, BCE_loss):
         recall_metric.update(preds, batch_labels)
         accuracy_metric.update(preds, batch_labels)
         precision_metric.update(preds, batch_labels)
-        if idx < max_num:
-            print(idx)
-            save_test_results(data_fn, preds.detach().to('cpu').numpy(), idx)
-        #else:
-        #    break
+        if len(data_fn)==1:
+            if idx < max_num:
+                print(idx)
+                save_test_results(data_fn, preds.detach().to('cpu').numpy(), idx)
+            else:
+                break
     recall = recall_metric.compute()
     acc = accuracy_metric.compute()
     prec = precision_metric.compute()

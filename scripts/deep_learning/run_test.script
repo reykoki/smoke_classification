@@ -9,6 +9,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --account=ucb437_asc1
 #SBATCH --mail-type=ALL
+#SBATCH --output=logs/test.log
 #SBATCH --mail-user="rey.koki@colorado.edu"
 
 unset SLURM_MEM_PER_NODE
