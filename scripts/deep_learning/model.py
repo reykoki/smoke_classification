@@ -38,10 +38,11 @@ def val_model(dataloader, model, BCE_loss):
         batch_data, batch_labels = data
         batch_data, batch_labels = batch_data.to(device, dtype=torch.float), batch_labels.to(device, dtype=torch.float)
         preds = model(batch_data)
-        preds = preds.squeeze()
+        preds = preds.squeeze(1)
         loss = BCE_loss(preds, batch_labels).to(device)
         test_loss = loss.item()
         total_loss += test_loss
+        batch_labels = batch_labels.int()
         recall_metric.update(preds, batch_labels)
         accuracy_metric.update(preds, batch_labels)
         precision_metric.update(preds, batch_labels)
